@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kripto Analiz Bot</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1 id="page-title">Ana Sayfa</h1>
+        <button class="menu-toggle" onclick="toggleMenu()">☰</button>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>Menü</h2>
+            <button class="sidebar-close" onclick="toggleMenu()">✕</button>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="#" onclick="loadPage('home')"><span class="icon">🏠</span> Ana Sayfa</a></li>
+            <li><a href="#" onclick="loadPage('technical-analysis')"><span class="icon">📊</span> Teknik Analiz</a></li>
+            <li><a href="#" onclick="loadPage('coin-ai')"><span class="icon">🤖</span> Yapay Zeka Asistanı</a></li>
+            <li><a href="#" onclick="loadPage('chart-analysis')"><span class="icon">📈</span> Grafik Analizi</a></li>
+            <li><a href="#" onclick="loadPage('trading-signals')"><span class="icon">🎯</span> İşlem Sinyalleri</a></li>
+            <li><a href="#" onclick="loadPage('market-screener')"><span class="icon">🔍</span> Piyasa Tarayıcı</a></li>
+            <li><a href="#" onclick="loadPage('economic-indicators')"><span class="icon">💹</span> Ekonomik Göstergeler</a></li>
+            <li><a href="#" onclick="loadPage('fear-greed')"><span class="icon">😱</span> Korku & Açgözlülük</a></li>
+            <li><a href="#" onclick="loadPage('whale-alerts')"><span class="icon">🐋</span> Balina Alarmları</a></li>
+            <li><a href="#" onclick="loadPage('news')"><span class="icon">📰</span> Haberler</a></li>
+            <li><a href="#" onclick="loadPage('history')"><span class="icon">📋</span> Geçmiş Analizler</a></li>
+            <li><a href="#" onclick="loadPage('user-info')"><span class="icon">ℹ️</span> Bilgilerim</a></li>
+        </ul>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+    <!-- Content -->
+    <div class="content" id="content">
+        <div class="loading">Yükleniyor...</div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Detay</h2>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

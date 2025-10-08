@@ -1,0 +1,35 @@
+{
+  "name": "telegram-crypto-bot",
+  "version": "1.0.0",
+  "description": "Telegram Kripto Para Mini App",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "main-bot": "node bots/mainBot.js",
+    "admin-bot": "node bots/adminBot.js",
+    "cron": "node services/cronJobs.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "telegram",
+    "crypto",
+    "bot"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "form-data": "^4.0.4",
+    "node-cron": "^3.0.3",
+    "openai": "^4.20.1",
+    "rss-parser": "^3.13.0",
+    "technicalindicators": "^3.1.0",
+    "telegraf": "^4.15.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
