@@ -81,6 +81,40 @@ app.post('/api/register', async (req, res) => {
       });
     }
 
+    // Base64'ten buffer'a çevir ve Supabase Storage'a yükle
+    let imageUrl = payment_screenshot;
+    if (payment_screenshot.startsWith('data:image')) {
+      try {
+        const base64Data = payment_screenshot.split(',')[1];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const fileName = `payment_${telegram_id}_${Date.now()}.jpg`;
+
+        const { data: uploadData, error: uploadError } = await supabase
+          .storage
+          .from('payment-screenshots')
+          .upload(fileName, buffer, {
+            contentType: 'image/jpeg',
+            upsert: false
+          });
+
+        if (uploadError) {
+          console.error('Supabase upload hatası:', uploadError);
+          // Hata olursa base64 kullan
+        } else {
+          // Public URL oluştur
+          const { data: urlData } = supabase
+            .storage
+            .from('payment-screenshots')
+            .getPublicUrl(fileName);
+
+          imageUrl = urlData.publicUrl;
+        }
+      } catch (uploadErr) {
+        console.error('Upload işlemi hatası:', uploadErr);
+        // Hata olursa base64 kullan
+      }
+    }
+
     // Yeni kayıt talebi oluştur
     const { data, error } = await supabase
       .from('payment_requests')
@@ -89,7 +123,7 @@ app.post('/api/register', async (req, res) => {
         username: username || '',
         first_name: first_name || '',
         last_name: last_name || '',
-        payment_screenshot_url: payment_screenshot,
+        payment_screenshot_url: imageUrl,
         status: 'pending'
       }])
       .select()
@@ -150,6 +184,33 @@ app.post('/api/technical-analysis', checkUser, async (req, res) => {
       return res.status(400).json({ error: 'Symbol ve timeframe gerekli' });
     }
 
+    // Cooldown kontrolü - Son analiz zamanını kontrol et
+    const cooldownSeconds = parseInt(process.env.TECHNICAL_ANALYSIS_COOLDOWN || 120);
+    const { data: lastAnalysis } = await supabase
+      .from('technical_analysis_history')
+      .select('created_at')
+      .eq('telegram_id', req.user.telegram_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (lastAnalysis) {
+      const lastAnalysisTime = new Date(lastAnalysis.created_at).getTime();
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - lastAnalysisTime) / 1000);
+      const remainingSeconds = cooldownSeconds - elapsedSeconds;
+
+      if (remainingSeconds > 0) {
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        return res.status(429).json({
+          error: `Lütfen ${minutes} dakika ${seconds} saniye bekleyin`,
+          remainingSeconds,
+          cooldownSeconds
+        });
+      }
+    }
+
     // OpenAI kullanım kontrolü
     const usageCheck = await openaiService.checkUsageLimit(req.user.telegram_id, supabase);
 
@@ -178,7 +239,8 @@ app.post('/api/technical-analysis', checkUser, async (req, res) => {
       success: true,
       analysis,
       data,
-      remaining: usageCheck.remaining - 1
+      remaining: usageCheck.remaining - 1,
+      cooldownSeconds
     });
   } catch (error) {
     console.error('Technical Analysis API hatası:', error);
@@ -433,11 +495,53 @@ app.get('/api/whale-alerts', checkUser, async (req, res) => {
       .from('whale_alerts')
       .select('*')
       .order('timestamp', { ascending: false })
-      .limit(50);
+      .limit(200);
 
     if (error) throw error;
 
-    res.json({ success: true, alerts: data });
+    // Büyüklüğe göre kategorize et
+    const categories = {
+      million_1: [],    // 1M - 5M
+      million_5: [],    // 5M - 10M
+      million_10: [],   // 10M - 50M
+      million_50: [],   // 50M - 100M
+      million_100: []   // 100M+
+    };
+
+    data.forEach(tx => {
+      const amount = tx.amount_usd;
+
+      if (amount >= 100000000) {
+        categories.million_100.push(tx);
+      } else if (amount >= 50000000) {
+        categories.million_50.push(tx);
+      } else if (amount >= 10000000) {
+        categories.million_10.push(tx);
+      } else if (amount >= 5000000) {
+        categories.million_5.push(tx);
+      } else if (amount >= 1000000) {
+        categories.million_1.push(tx);
+      }
+    });
+
+    res.json({
+      success: true,
+      alerts: data,
+      categories: {
+        million_1: categories.million_1.slice(0, 50),
+        million_5: categories.million_5.slice(0, 50),
+        million_10: categories.million_10.slice(0, 50),
+        million_50: categories.million_50.slice(0, 50),
+        million_100: categories.million_100.slice(0, 50)
+      },
+      counts: {
+        million_1: categories.million_1.length,
+        million_5: categories.million_5.length,
+        million_10: categories.million_10.length,
+        million_50: categories.million_50.length,
+        million_100: categories.million_100.length
+      }
+    });
   } catch (error) {
     console.error('Whale Alerts API hatası:', error);
     res.status(500).json({ error: 'Whale alerts getirilemedi' });

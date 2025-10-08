@@ -41,21 +41,29 @@ bot.command('bekleyen', async (ctx) => {
       return;
     }
 
-    let message = `📋 Onay Bekleyen Kullanıcılar (${requests.length}):\n\n`;
+    await ctx.reply(`📋 Onay Bekleyen Kullanıcılar: ${requests.length}\n\n`);
 
-    requests.forEach((req, index) => {
+    for (const req of requests) {
       const date = new Date(req.created_at).toLocaleString('tr-TR');
-      message += `${index + 1}. ID: ${req.id}\n`;
-      message += `   👤 ${req.first_name} ${req.last_name || ''}\n`;
-      message += `   📝 @${req.username || 'Yok'}\n`;
-      message += `   🆔 Telegram ID: ${req.telegram_id}\n`;
-      message += `   📅 Tarih: ${date}\n`;
-      message += `   🔗 Görsel: ${req.payment_screenshot_url}\n\n`;
-    });
+      const caption = `🆔 Talep ID: ${req.id}\n👤 ${req.first_name} ${req.last_name || ''}\n📝 @${req.username || 'Yok'}\n🆔 Telegram ID: ${req.telegram_id}\n📅 ${date}\n\n✅ Onay: /onay ${req.id}\n❌ Red: /reddet ${req.id}`;
 
-    message += '\nOnaylamak için: /onay [id]\nReddetmek için: /reddet [id]';
-
-    ctx.reply(message);
+      try {
+        // URL ise direkt gönder (Supabase public URL)
+        if (req.payment_screenshot_url && !req.payment_screenshot_url.startsWith('data:image')) {
+          await ctx.replyWithPhoto(req.payment_screenshot_url, { caption });
+        } else if (req.payment_screenshot_url && req.payment_screenshot_url.startsWith('data:image')) {
+          // Base64 varsa (eski kayıtlar için)
+          const base64Data = req.payment_screenshot_url.split(',')[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          await ctx.replyWithPhoto({ source: buffer }, { caption });
+        } else {
+          await ctx.reply(caption + '\n\n⚠️ Görsel bulunamadı');
+        }
+      } catch (photoError) {
+        console.error('Görsel gönderme hatası:', photoError);
+        await ctx.reply(caption + '\n\n⚠️ Görsel gönderilemedi');
+      }
+    }
   } catch (error) {
     console.error('Bekleyen listesi hatası:', error);
     ctx.reply('❌ Bir hata oluştu.');

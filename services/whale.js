@@ -204,6 +204,37 @@ class WhaleAlertService {
 
     return categories;
   }
+
+  /**
+   * İşlemleri büyüklüğe göre kategorize et
+   */
+  categorizeBySize(transactions) {
+    const categories = {
+      million_1: [],    // 1M - 5M
+      million_5: [],    // 5M - 10M
+      million_10: [],   // 10M - 50M
+      million_50: [],   // 50M - 100M
+      million_100: []   // 100M+
+    };
+
+    transactions.forEach(tx => {
+      const amount = tx.amount_usd;
+
+      if (amount >= 100000000) {
+        categories.million_100.push(tx);
+      } else if (amount >= 50000000) {
+        categories.million_50.push(tx);
+      } else if (amount >= 10000000) {
+        categories.million_10.push(tx);
+      } else if (amount >= 5000000) {
+        categories.million_5.push(tx);
+      } else if (amount >= 1000000) {
+        categories.million_1.push(tx);
+      }
+    });
+
+    return categories;
+  }
 }
 
 module.exports = new WhaleAlertService();

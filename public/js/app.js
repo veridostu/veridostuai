@@ -652,6 +652,8 @@ async function loadFearGreed() {
 }
 
 // Whale Alerts
+let currentWhaleCategory = 'all';
+
 async function loadWhaleAlerts() {
   document.getElementById('page-title').textContent = 'Balina Alarmları';
   const content = document.getElementById('content');
@@ -662,8 +664,60 @@ async function loadWhaleAlerts() {
     const response = await apiCall('/api/whale-alerts');
 
     if (response.success) {
-      const alerts = response.alerts;
-      let html = '<div class="card"><div class="card-title">Balina Alarmları</div>';
+      const categories = response.categories || {};
+      const counts = response.counts || {};
+
+      let html = '<div class="card">';
+
+      // Kategori butonları
+      html += `
+        <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
+          <button class="btn ${currentWhaleCategory === 'all' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('all')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            Tümü (${response.alerts.length})
+          </button>
+          <button class="btn ${currentWhaleCategory === 'million_1' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('million_1')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            1M-5M (${counts.million_1 || 0})
+          </button>
+          <button class="btn ${currentWhaleCategory === 'million_5' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('million_5')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            5M-10M (${counts.million_5 || 0})
+          </button>
+          <button class="btn ${currentWhaleCategory === 'million_10' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('million_10')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            10M-50M (${counts.million_10 || 0})
+          </button>
+          <button class="btn ${currentWhaleCategory === 'million_50' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('million_50')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            50M-100M (${counts.million_50 || 0})
+          </button>
+          <button class="btn ${currentWhaleCategory === 'million_100' ? 'btn-primary' : ''}"
+                  onclick="filterWhaleAlerts('million_100')"
+                  style="flex: 1; min-width: 120px; font-size: 12px;">
+            100M+ (${counts.million_100 || 0})
+          </button>
+        </div>
+      `;
+
+      // Seçili kategoriye göre alerts
+      let alerts = currentWhaleCategory === 'all'
+        ? response.alerts
+        : (categories[currentWhaleCategory] || []);
+
+      html += `<div class="card-title">
+        ${currentWhaleCategory === 'all' ? 'Tüm Alarmlar' :
+          currentWhaleCategory === 'million_1' ? '1M-5M USD Transferler' :
+          currentWhaleCategory === 'million_5' ? '5M-10M USD Transferler' :
+          currentWhaleCategory === 'million_10' ? '10M-50M USD Transferler' :
+          currentWhaleCategory === 'million_50' ? '50M-100M USD Transferler' :
+          '100M+ USD Transferler'}
+      </div>`;
 
       alerts.forEach(alert => {
         // Transfer tipi ve emoji
@@ -761,12 +815,171 @@ async function loadWhaleAlerts() {
 
       html += '</div>';
       content.innerHTML = html;
+
+      // Response'u global değişkende sakla
+      window.whaleAlertsData = response;
     } else {
       content.innerHTML = `<div class="alert alert-error">${response.error}</div>`;
     }
   } catch (error) {
     content.innerHTML = `<div class="alert alert-error">Whale alerts yüklenemedi</div>`;
   }
+}
+
+// Whale Alerts filtreleme
+function filterWhaleAlerts(category) {
+  currentWhaleCategory = category;
+
+  if (!window.whaleAlertsData) {
+    loadWhaleAlerts();
+    return;
+  }
+
+  const response = window.whaleAlertsData;
+  const content = document.getElementById('content');
+  const categories = response.categories || {};
+  const counts = response.counts || {};
+
+  let html = '<div class="card">';
+
+  // Kategori butonları
+  html += `
+    <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 8px;">
+      <button class="btn ${currentWhaleCategory === 'all' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('all')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        Tümü (${response.alerts.length})
+      </button>
+      <button class="btn ${currentWhaleCategory === 'million_1' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('million_1')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        1M-5M (${counts.million_1 || 0})
+      </button>
+      <button class="btn ${currentWhaleCategory === 'million_5' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('million_5')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        5M-10M (${counts.million_5 || 0})
+      </button>
+      <button class="btn ${currentWhaleCategory === 'million_10' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('million_10')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        10M-50M (${counts.million_10 || 0})
+      </button>
+      <button class="btn ${currentWhaleCategory === 'million_50' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('million_50')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        50M-100M (${counts.million_50 || 0})
+      </button>
+      <button class="btn ${currentWhaleCategory === 'million_100' ? 'btn-primary' : ''}"
+              onclick="filterWhaleAlerts('million_100')"
+              style="flex: 1; min-width: 120px; font-size: 12px;">
+        100M+ (${counts.million_100 || 0})
+      </button>
+    </div>
+  `;
+
+  // Seçili kategoriye göre alerts
+  let alerts = currentWhaleCategory === 'all'
+    ? response.alerts
+    : (categories[currentWhaleCategory] || []);
+
+  html += `<div class="card-title">
+    ${currentWhaleCategory === 'all' ? 'Tüm Alarmlar' :
+      currentWhaleCategory === 'million_1' ? '1M-5M USD Transferler' :
+      currentWhaleCategory === 'million_5' ? '5M-10M USD Transferler' :
+      currentWhaleCategory === 'million_10' ? '10M-50M USD Transferler' :
+      currentWhaleCategory === 'million_50' ? '50M-100M USD Transferler' :
+      '100M+ USD Transferler'}
+  </div>`;
+
+  alerts.forEach(alert => {
+    // Transfer tipi ve emoji
+    let typeText = '';
+    let typeColor = '';
+
+    if (alert.transaction_type === 'deposit') {
+      typeText = '📥 Borsa Girişi';
+      typeColor = '#22c55e';
+    } else if (alert.transaction_type === 'withdrawal') {
+      typeText = '📤 Borsa Çıkışı';
+      typeColor = '#ef4444';
+    } else if (alert.transaction_type === 'wallet_transfer') {
+      typeText = '💸 Cüzdandan Cüzdana';
+      typeColor = '#3b82f6';
+    } else if (alert.transaction_type === 'exchange_to_exchange') {
+      typeText = '🔄 Borsalar Arası';
+      typeColor = '#f59e0b';
+    } else {
+      typeText = '💰 Transfer';
+      typeColor = '#8b5cf6';
+    }
+
+    // Tutar formatı
+    const amountUsd = alert.amount_usd || 0;
+    let amountDisplay = '';
+    if (amountUsd >= 1000000000) {
+      amountDisplay = `$${(amountUsd / 1000000000).toFixed(1)}B`;
+    } else if (amountUsd >= 1000000) {
+      amountDisplay = `$${(amountUsd / 1000000).toFixed(1)}M`;
+    } else if (amountUsd >= 1000) {
+      amountDisplay = `$${(amountUsd / 1000).toFixed(1)}K`;
+    } else {
+      amountDisplay = `$${amountUsd.toFixed(0)}`;
+    }
+
+    // From/To bilgisi
+    const fromOwner = alert.from_owner || null;
+    const toOwner = alert.to_owner || null;
+    const fromAddr = alert.from_address || 'Unknown';
+    const toAddr = alert.to_address || 'Unknown';
+
+    let fromDisplay = '';
+    if (fromOwner && fromOwner !== 'unknown') {
+      fromDisplay = `<strong>${fromOwner}</strong> (${alert.from_owner_type || 'exchange'})`;
+    } else {
+      const fromShort = fromAddr.length > 10 ? fromAddr.substring(0, 6) + '...' + fromAddr.substring(fromAddr.length - 4) : fromAddr;
+      fromDisplay = fromShort;
+    }
+
+    let toDisplay = '';
+    if (toOwner && toOwner !== 'unknown') {
+      toDisplay = `<strong>${toOwner}</strong> (${alert.to_owner_type || 'exchange'})`;
+    } else {
+      const toShort = toAddr.length > 10 ? toAddr.substring(0, 6) + '...' + toAddr.substring(toAddr.length - 4) : toAddr;
+      toDisplay = toShort;
+    }
+
+    html += `
+      <div class="history-item" style="border-left: 3px solid ${typeColor};">
+        <div style="margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="font-size: 16px;">${alert.symbol.toUpperCase()}</strong>
+            <strong style="font-size: 16px; color: ${typeColor};">${amountDisplay}</strong>
+          </div>
+          <div style="font-size: 12px; color: ${typeColor}; margin-top: 3px;">
+            ${typeText}
+          </div>
+        </div>
+        <div style="font-size: 11px; color: var(--tg-theme-hint-color, #999); margin-top: 5px;">
+          <div style="margin-bottom: 3px;">
+            <strong>Miktar:</strong> ${alert.amount?.toLocaleString('tr-TR', {maximumFractionDigits: 2})} ${alert.symbol.toUpperCase()}
+          </div>
+          <div style="margin-bottom: 3px;">
+            <strong>Gönderen:</strong> ${fromDisplay}
+          </div>
+          <div style="margin-bottom: 3px;">
+            <strong>Alan:</strong> ${toDisplay}
+          </div>
+          <div style="margin-top: 5px; text-align: right;">
+            ${new Date(alert.timestamp).toLocaleString('tr-TR')}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  content.innerHTML = html;
 }
 
 // Haberler
