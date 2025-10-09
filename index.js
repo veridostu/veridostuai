@@ -21,6 +21,24 @@ app.get('/', (req, res) => {
 });
 
 /**
+ * Ödeme Bilgilerini Getir
+ */
+app.get('/api/payment-info', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      walletAddress: process.env.PAYMENT_WALLET_ADDRESS,
+      amountBtcbam: parseInt(process.env.PAYMENT_AMOUNT_BTCBAM || 400),
+      amountUsdt: parseInt(process.env.PAYMENT_AMOUNT_USDT || 19),
+      subscriptionDays: parseInt(process.env.SUBSCRIPTION_DAYS || 30)
+    });
+  } catch (error) {
+    console.error('Payment Info API hatası:', error);
+    res.status(500).json({ error: 'Ödeme bilgileri getirilemedi' });
+  }
+});
+
+/**
  * Kullanıcı kontrolü middleware
  */
 async function checkUser(req, res, next) {
@@ -270,6 +288,15 @@ app.post('/api/coin-ai', checkUser, async (req, res) => {
     let coinData = {};
 
     try {
+      // DEX ile ilgili anahtar kelimeleri kontrol et
+      const queryLower = query.toLowerCase();
+      const dexKeywords = ['dex', 'uniswap', 'pancakeswap', 'sushiswap', 'curve', 'merkeziyetsiz', 'swap'];
+      const isDexQuery = dexKeywords.some(keyword => queryLower.includes(keyword));
+
+      // Borsa listesi ile ilgili anahtar kelimeleri kontrol et
+      const exchangeKeywords = ['hangi borsa', 'hangi borsada', 'nerede işlem', 'nerede alınır', 'nereden alınır', 'hangi exchange'];
+      const isExchangeQuery = exchangeKeywords.some(keyword => queryLower.includes(keyword));
+
       // Query'den coin sembolünü çıkarmaya çalış
       const queryUpper = query.toUpperCase();
       const words = queryUpper.split(' ');
@@ -326,17 +353,128 @@ app.post('/api/coin-ai', checkUser, async (req, res) => {
 
       if (matchedCoin) {
         // Belirli coin bulundu
-        coinData = {
-          coin: matchedCoin,
-          globalMetrics: await cmcService.getGlobalMetricsQuotesLatest()
-        };
+        if (isExchangeQuery) {
+          // Borsa listesi sorusu - Market pairs verilerini çek
+          const [globalMetrics, marketPairs] = await Promise.all([
+            cmcService.getGlobalMetricsQuotesLatest(),
+            cmcService.getCryptocurrencyMarketPairs({
+              id: matchedCoin.id,
+              limit: 100
+            }).catch(err => {
+              console.log('Market pairs verisi çekilemedi:', err.message);
+              return null;
+            })
+          ]);
+
+          // CEX ve DEX'leri ayır
+          const cexList = [];
+          const dexList = [];
+
+          if (marketPairs && marketPairs.market_pairs) {
+            marketPairs.market_pairs.forEach(pair => {
+              const exchangeName = pair.exchange?.name || 'Unknown';
+              const isDex = ['Uniswap', 'PancakeSwap', 'SushiSwap', 'Curve', 'Raydium', 'Orca', 'SpookySwap'].some(
+                dexName => exchangeName.toLowerCase().includes(dexName.toLowerCase())
+              );
+
+              // CMC API farklı versiyonlarda farklı yapılar kullanabiliyor
+              const quoteData = pair.quote?.USD || pair.quotes?.[0] || {};
+
+              const pairInfo = {
+                exchange: exchangeName,
+                pair: pair.market_pair || `${pair.base_symbol}/${pair.quote_symbol}`,
+                price: quoteData.price || pair.price || 0,
+                volume24h: quoteData.volume_24h || pair.volume_24h || 0,
+                url: pair.market_url || ''
+              };
+
+              // Sadece valid verileri ekle
+              if (pairInfo.exchange !== 'Unknown' && pairInfo.volume24h > 0) {
+                if (isDex) {
+                  dexList.push(pairInfo);
+                } else {
+                  cexList.push(pairInfo);
+                }
+              }
+            });
+          }
+
+          // Hacme göre sırala ve ilk 5 CEX, 3 DEX
+          cexList.sort((a, b) => b.volume24h - a.volume24h);
+          dexList.sort((a, b) => b.volume24h - a.volume24h);
+
+          coinData = {
+            coin: matchedCoin,
+            globalMetrics,
+            exchanges: {
+              cex: cexList.slice(0, 5),
+              dex: dexList.slice(0, 3),
+              totalCex: cexList.length,
+              totalDex: dexList.length
+            }
+          };
+        } else if (isDexQuery) {
+          // DEX sorusu - DEX verilerini de çek
+          const [globalMetrics, dexData] = await Promise.all([
+            cmcService.getGlobalMetricsQuotesLatest(),
+            cmcService.getDEXListingsQuotes({
+              symbol: matchedCoin.symbol,
+              limit: 10
+            }).catch(err => {
+              console.log('DEX verisi çekilemedi:', err.message);
+              return null;
+            })
+          ]);
+
+          coinData = {
+            coin: matchedCoin,
+            globalMetrics,
+            dexData: dexData ? {
+              listings: dexData,
+              hasDexData: true
+            } : { hasDexData: false }
+          };
+        } else {
+          // Normal coin sorusu - sadece CEX verileri
+          coinData = {
+            coin: matchedCoin,
+            globalMetrics: await cmcService.getGlobalMetricsQuotesLatest()
+          };
+        }
       } else {
-        // Coin bulunamadı - genel piyasa verisi gönder
-        const listings = await cmcService.getCryptocurrencyListingsLatest({ limit: 10 });
-        coinData = {
-          globalMetrics: await cmcService.getGlobalMetricsQuotesLatest(),
-          topCoins: listings
-        };
+        // Coin bulunamadı - genel piyasa verisi
+        if (isDexQuery) {
+          // DEX sorusu - trending DEX tokenleri
+          const [globalMetrics, listings, trendingDex] = await Promise.all([
+            cmcService.getGlobalMetricsQuotesLatest(),
+            cmcService.getCryptocurrencyListingsLatest({ limit: 10 }),
+            cmcService.getDEXListingsQuotes({
+              limit: 10,
+              sort: 'volume_24h',
+              sort_dir: 'desc'
+            }).catch(err => {
+              console.log('Trending DEX verisi çekilemedi:', err.message);
+              return null;
+            })
+          ]);
+
+          coinData = {
+            globalMetrics,
+            topCoins: listings,
+            trendingDex: trendingDex || []
+          };
+        } else {
+          // Normal genel soru - sadece top coins
+          const [globalMetrics, listings] = await Promise.all([
+            cmcService.getGlobalMetricsQuotesLatest(),
+            cmcService.getCryptocurrencyListingsLatest({ limit: 10 })
+          ]);
+
+          coinData = {
+            globalMetrics,
+            topCoins: listings
+          };
+        }
       }
     } catch (err) {
       console.error('CMC veri çekme hatası:', err);

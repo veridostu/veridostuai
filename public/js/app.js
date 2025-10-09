@@ -29,8 +29,87 @@ function openModal(title, content) {
   document.getElementById('modal').classList.add('active');
 }
 
+function openModalById(title, contentId) {
+  const content = window.historyContents && window.historyContents[contentId];
+  if (content) {
+    openModal(title, content);
+  } else {
+    console.error('Content not found:', contentId);
+  }
+}
+
 function closeModal() {
   document.getElementById('modal').classList.remove('active');
+}
+
+// Cüzdan adresini kopyala
+function copyWalletAddress(address) {
+  const walletAddress = address || '0x55cB743E051994F374faAEcD7CD2fFeC3c44464e';
+
+  // Modern tarayıcılar için Clipboard API
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(walletAddress).then(() => {
+      showToast('✅ Cüzdan adresi kopyalandı!');
+    }).catch(err => {
+      console.error('Clipboard API hatası:', err);
+      fallbackCopyText(walletAddress);
+    });
+  } else {
+    // Eski tarayıcılar için fallback
+    fallbackCopyText(walletAddress);
+  }
+}
+
+// Fallback kopyalama fonksiyonu
+function fallbackCopyText(text) {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+
+  try {
+    document.execCommand('copy');
+    showToast('✅ Cüzdan adresi kopyalandı!');
+  } catch (err) {
+    console.error('Kopyalama hatası:', err);
+    showToast('❌ Kopyalama başarısız');
+  }
+
+  document.body.removeChild(textArea);
+}
+
+// Toast bildirimi göster
+function showToast(message) {
+  // Telegram WebApp HapticFeedback
+  if (tg && tg.HapticFeedback) {
+    tg.HapticFeedback.notificationOccurred('success');
+  }
+
+  // Toast elementi oluştur
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 10000;
+    animation: fadeInOut 2s ease-in-out;
+  `;
+
+  document.body.appendChild(toast);
+
+  // 2 saniye sonra kaldır
+  setTimeout(() => {
+    document.body.removeChild(toast);
+  }, 2000);
 }
 
 // API çağrıları
@@ -148,8 +227,27 @@ function showMainDashboard() {
 }
 
 // Kayıt formu (kayıtsız kullanıcılar için)
-function showRegistrationForm() {
+async function showRegistrationForm() {
   const content = document.getElementById('content');
+
+  // Ödeme bilgilerini API'den çek
+  let paymentInfo = {
+    walletAddress: '0x55cB743E051994F374faAEcD7CD2fFeC3c44464e',
+    amountBtcbam: 400,
+    amountUsdt: 19,
+    subscriptionDays: 30
+  };
+
+  try {
+    const response = await fetch('/api/payment-info');
+    const data = await response.json();
+    if (data.success) {
+      paymentInfo = data;
+    }
+  } catch (error) {
+    console.error('Payment info fetch error:', error);
+  }
+
   content.innerHTML = `
     <div class="card">
       <h2>🔐 Kayıt Ol</h2>
@@ -166,19 +264,24 @@ function showRegistrationForm() {
         <div style="margin-bottom: 10px;">
           <strong>Cüzdan Adresi (BSC Ağı):</strong>
         </div>
-        <div style="background: white; padding: 10px; border-radius: 6px; word-break: break-all; font-family: monospace; font-size: 12px;">
-          0x55cB743E051994F374faAEcD7CD2fFeC3c44464e
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div id="wallet-address" style="background: white; padding: 10px; border-radius: 6px; word-break: break-all; font-family: monospace; font-size: 12px; flex: 1;">
+            ${paymentInfo.walletAddress}
+          </div>
+          <button onclick="copyWalletAddress('${paymentInfo.walletAddress}')" style="background: var(--tg-theme-button-color, #3390ec); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: 14px;">
+            📋 Kopyala
+          </button>
         </div>
       </div>
 
       <div style="background: var(--tg-theme-secondary-bg-color, #f9f9f9); padding: 15px; border-radius: 8px; margin: 15px 0;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
           <strong>💵 Tutar:</strong>
-          <span>400 BTCBAM veya 19 USDT</span>
+          <span>${paymentInfo.amountBtcbam} BTCBAM veya ${paymentInfo.amountUsdt} USDT</span>
         </div>
         <div style="display: flex; justify-content: space-between;">
           <strong>⏰ Süre:</strong>
-          <span>30 Gün</span>
+          <span>${paymentInfo.subscriptionDays} Gün</span>
         </div>
       </div>
 
@@ -1054,8 +1157,15 @@ async function showHistory(type) {
           ? `${item.symbol} - ${item.timeframe}`
           : item.user_query.substring(0, 50);
 
+        const fullContent = (type === 'technical' ? item.analysis_result : item.ai_response);
+        const contentId = `history-content-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+        // İçeriği geçici bir objeye kaydet
+        window.historyContents = window.historyContents || {};
+        window.historyContents[contentId] = fullContent.replace(/\n/g, '<br>');
+
         html += `
-          <div class="history-item" onclick='openModal("${title}", \`${item[type === 'technical' ? 'analysis_result' : 'ai_response']}\`)'>
+          <div class="history-item" onclick="openModalById('${title.replace(/'/g, '&#39;')}', '${contentId}')">
             <div class="history-item-title">${title}</div>
             <div class="history-item-preview">${preview}...</div>
             <div class="read-more">Devamını Oku</div>

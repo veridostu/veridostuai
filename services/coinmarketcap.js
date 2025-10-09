@@ -310,6 +310,22 @@ class CoinMarketCapService {
   }
 
   /**
+   * Cryptocurrency Market Pairs - Coin'in hangi borsalarda işlem gördüğünü gösterir
+   */
+  async getCryptocurrencyMarketPairs(params = {}) {
+    try {
+      const response = await axios.get(`${this.baseUrl}/v2/cryptocurrency/market-pairs/latest`, {
+        headers: this.headers,
+        params
+      });
+      return response.data.data;
+    } catch (error) {
+      console.error('CMC Market Pairs hatası:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Coin AI için tüm ilgili verileri topla
    */
   async getDataForCoinAI(symbol) {
